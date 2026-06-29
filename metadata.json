@@ -1,0 +1,6 @@
+{
+  "name": "Clutch",
+  "description": "Autonomous deadline management agent that acts across planning, crisis, and damage control.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
