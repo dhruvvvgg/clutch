@@ -1,6 +1,25 @@
 import { motion } from 'motion/react';
 import { Loader2, Check, RefreshCw, AlertCircle, Compass, ShieldAlert, Calendar, Mail, Sparkles } from 'lucide-react';
 
+const GoogleCalendarLogo = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="20" height="17" rx="3" fill="#4285F4" />
+    <path d="M2 4V8H22V4C22 2.9 21.1 2 20 2H4C2.9 2 2 2.9 2 4Z" fill="#34A853" />
+    <rect x="6" y="10" width="12" height="8" rx="1.5" fill="white" />
+    <text x="12" y="17" fill="#4285F4" fontSize="8" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">31</text>
+  </svg>
+);
+
+const GmailLogo = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4Z" fill="#F2F2F2" />
+    <path d="M20 4H4C2.9 4 2 4.9 2 6V9L12 14L22 9V6C22 4.9 21.1 4 20 4Z" fill="#EA4335" />
+    <path d="M2 9V18C2 19.1 2.9 20 4 20H6V11L2 9Z" fill="#FBBC05" />
+    <path d="M22 9V18C22 19.1 21.1 20 20 20H18V11L22 9Z" fill="#34A853" />
+    <path d="M18 20H6V11L12 14L18 11V20Z" fill="#4285F4" />
+  </svg>
+);
+
 interface PipelineStep {
   name: string;
   status: string; // 'idle' | 'running' | 'success' | 'failed'
@@ -25,8 +44,8 @@ export default function PipelineView({
   const icons = [
     <Compass className="w-4 h-4 text-orange-500" />,
     <Sparkles className="w-4 h-4 text-[#4285F4]" />,
-    <Calendar className="w-4 h-4 text-blue-500" />,
-    <Mail className="w-4 h-4 text-rose-500" />,
+    <GoogleCalendarLogo className="w-4 h-4" />,
+    <GmailLogo className="w-4 h-4" />,
     <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />,
   ];
 
@@ -51,7 +70,7 @@ export default function PipelineView({
     if (lower.includes('calendar') || lower.includes('triage')) {
       return (
         <div className="inline-flex items-center gap-1 bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/20 rounded-full px-2 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider transition-all">
-          <Calendar className="w-2.5 h-2.5" />
+          <GoogleCalendarLogo className="w-3 h-3" />
           Google Calendar API
         </div>
       );
@@ -59,7 +78,7 @@ export default function PipelineView({
     if (lower.includes('gmail') || lower.includes('comms') || lower.includes('communications')) {
       return (
         <div className="inline-flex items-center gap-1 bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/20 rounded-full px-2 py-0.5 text-[8px] font-bold font-mono uppercase tracking-wider transition-all">
-          <Mail className="w-2.5 h-2.5" />
+          <GmailLogo className="w-3 h-3" />
           Gmail API
         </div>
       );
@@ -90,7 +109,7 @@ export default function PipelineView({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="max-w-3xl mx-auto space-y-6 py-6 select-none transition-colors duration-300"
+      className="max-w-3xl lg:max-w-6xl mx-auto space-y-6 py-6 select-none transition-colors duration-300"
     >
       {/* Title */}
       <div className="space-y-2 text-center">
@@ -106,98 +125,107 @@ export default function PipelineView({
         </p>
       </div>
 
-      {/* Steps List */}
-      <div className="bg-white dark:bg-[#1C1B19] border border-[#E6E5E0] dark:border-[#2E2D2A] ballpark-shadow rounded-[2rem] p-6 sm:p-8 space-y-4 transition-colors duration-300">
-        <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] border-b border-[#FAF9F6] dark:border-[#2E2D2A] pb-3 mb-2 transition-colors duration-300">
-          Coordination Pipeline
-        </h3>
+      {/* Stacked Layout allowing cards to expand fully */}
+      <div className="flex flex-col gap-6">
+        {/* Steps List */}
+        <div className="bg-white dark:bg-[#1C1B19] border border-[#E6E5E0] dark:border-[#2E2D2A] ballpark-shadow rounded-[2rem] p-6 sm:p-8 space-y-4 transition-colors duration-300">
+          <div>
+            <h3 className="text-xs font-mono font-bold uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] border-b border-[#FAF9F6] dark:border-[#2E2D2A] pb-3 mb-4 transition-colors duration-300">
+              Coordination Pipeline
+            </h3>
 
-        <div className="space-y-4">
-          {steps.map((step, idx) => {
-            const isRunning = step.status === 'running';
-            const isSuccess = step.status === 'success';
-            const isIdle = step.status === 'idle';
+            <div className="space-y-4">
+              {steps.map((step, idx) => {
+                const isRunning = step.status === 'running';
+                const isSuccess = step.status === 'success';
+                const isIdle = step.status === 'idle';
 
-            return (
-              <div 
-                key={idx} 
-                className={`flex items-start gap-4 p-4 rounded-2xl border transition-all duration-300 ${
-                  isRunning 
-                    ? 'bg-[#FAF9F6] dark:bg-[#252422] border-[#D95D39]/40 shadow-sm' 
-                    : isSuccess 
-                      ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-200/50 dark:border-emerald-500/20' 
-                      : 'bg-white dark:bg-[#1C1B19] border-[#FAF9F6] dark:border-[#2E2D2A]/60'
-                }`}
-              >
-                {/* Visual indicator */}
-                <div className="flex-shrink-0 mt-0.5">
-                  {isSuccess ? (
-                    <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
-                      <Check className="w-4 h-4" />
+                return (
+                  <div 
+                    key={idx} 
+                    className={`flex items-start gap-4 p-4 rounded-2xl border transition-all duration-300 ${
+                      isRunning 
+                        ? 'bg-[#FAF9F6] dark:bg-[#252422] border-[#D95D39]/40 shadow-sm' 
+                        : isSuccess 
+                          ? 'bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-200/50 dark:border-emerald-500/20' 
+                          : 'bg-white dark:bg-[#1C1B19] border-[#FAF9F6] dark:border-[#2E2D2A]/60'
+                    }`}
+                  >
+                    {/* Visual indicator */}
+                    <div className="flex-shrink-0 mt-0.5">
+                      {isSuccess ? (
+                        <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center">
+                          <Check className="w-4 h-4" />
+                        </div>
+                      ) : isRunning ? (
+                        <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center animate-spin">
+                          <RefreshCw className="w-4 h-4" />
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] text-[#71706C] dark:text-[#A19F9A] flex items-center justify-center transition-colors duration-300">
+                          {icons[idx] || idx + 1}
+                        </div>
+                      )}
                     </div>
-                  ) : isRunning ? (
-                    <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20 flex items-center justify-center animate-spin">
-                      <RefreshCw className="w-4 h-4" />
-                    </div>
-                  ) : (
-                    <div className="w-8 h-8 rounded-full bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] text-[#71706C] dark:text-[#A19F9A] flex items-center justify-center transition-colors duration-300">
-                      {icons[idx] || idx + 1}
-                    </div>
-                  )}
-                </div>
 
-                <div className="flex-1 space-y-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className={`text-sm font-bold flex items-center gap-2 transition-colors duration-300 ${isRunning ? 'text-[#1C1C1A] dark:text-[#F5F4F0]' : 'text-[#51504B] dark:text-[#D2CFC9]'}`}>
-                        {step.name}
-                      </h4>
-                      {getGoogleBadge(step.name)}
+                    <div className="flex-1 space-y-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className={`text-sm font-bold flex items-center gap-2 transition-colors duration-300 ${isRunning ? 'text-[#1C1C1A] dark:text-[#F5F4F0]' : 'text-[#51504B] dark:text-[#D2CFC9]'}`}>
+                            {step.name}
+                          </h4>
+                          {getGoogleBadge(step.name)}
+                        </div>
+                        
+                        <span className={`self-start sm:self-center text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded transition-all duration-300 ${
+                          isSuccess 
+                            ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                            : isRunning 
+                              ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 animate-pulse' 
+                              : 'bg-[#FAF9F6] dark:bg-[#252422] text-[#71706C] dark:text-[#A19F9A]'
+                        }`}>
+                          {step.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#71706C] dark:text-[#A19F9A] leading-relaxed transition-colors duration-300">
+                        {step.desc}
+                      </p>
                     </div>
-                    
-                    <span className={`self-start sm:self-center text-[9px] font-mono font-bold uppercase px-2 py-0.5 rounded transition-all duration-300 ${
-                      isSuccess 
-                        ? 'bg-emerald-50 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
-                        : isRunning 
-                          ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 animate-pulse' 
-                          : 'bg-[#FAF9F6] dark:bg-[#252422] text-[#71706C] dark:text-[#A19F9A]'
-                    }`}>
-                      {step.status}
-                    </span>
                   </div>
-                  <p className="text-xs text-[#71706C] dark:text-[#A19F9A] leading-relaxed transition-colors duration-300">
-                    {step.desc}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Terminal Logs Block */}
-      <div className="bg-[#1C1C1A] dark:bg-[#121211] text-[#FAF9F6] border border-[#1C1C1A] dark:border-[#2E2D2A] rounded-[2rem] p-6 shadow-2xl relative overflow-hidden transition-colors duration-300">
-        {/* Glowing visual indicator */}
-        <div className="absolute top-4 right-6 flex items-center gap-2 font-mono text-[9px] text-[#A19F9A]">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-          <span>LIVE METADATA FEED</span>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
-        <h4 className="text-[10px] font-mono font-black uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] border-b border-[#32312E] dark:border-[#2E2D2A] pb-3 mb-4 transition-colors duration-300">
-          Console Output Log
-        </h4>
-
-        <div className="font-mono text-xs space-y-2 h-44 overflow-y-auto scrollbar-thin pr-2">
-          {logs.length === 0 ? (
-            <p className="text-[#71706C] dark:text-[#5E5D59] italic transition-colors duration-300">Warming up pipeline metrics... Spawning sandboxed agents...</p>
-          ) : (
-            logs.map((log, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-neutral-300 dark:text-neutral-400">
-                <span className="text-[#D95D39] select-none">&gt;</span>
-                <p className="leading-relaxed whitespace-pre-wrap">{log}</p>
+        {/* Terminal Logs Block */}
+        <div className="bg-[#1C1C1A] dark:bg-[#121211] text-[#FAF9F6] border border-[#1C1C1A] dark:border-[#2E2D2A] rounded-[2rem] p-6 shadow-2xl relative overflow-hidden transition-colors duration-300">
+          <div className="flex flex-col">
+            <div>
+              {/* Glowing visual indicator */}
+              <div className="absolute top-4 right-6 flex items-center gap-2 font-mono text-[9px] text-[#A19F9A]">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
+                <span>LIVE METADATA FEED</span>
               </div>
-            ))
-          )}
+
+              <h4 className="text-[10px] font-mono font-black uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] border-b border-[#32312E] dark:border-[#2E2D2A] pb-3 mb-4 transition-colors duration-300">
+                Console Output Log
+              </h4>
+            </div>
+
+            <div className="font-mono text-xs space-y-2 h-64 lg:h-80 overflow-y-auto scrollbar-thin pr-2 mt-2">
+              {logs.length === 0 ? (
+                <p className="text-[#71706C] dark:text-[#5E5D59] italic transition-colors duration-300">Warming up pipeline metrics... Spawning sandboxed agents...</p>
+              ) : (
+                logs.map((log, idx) => (
+                  <div key={idx} className="flex items-start gap-2 text-neutral-300 dark:text-neutral-400">
+                    <span className="text-[#D95D39] select-none">&gt;</span>
+                    <p className="leading-relaxed whitespace-pre-wrap">{log}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </motion.div>

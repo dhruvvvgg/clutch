@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Play, X, Sparkles } from 'lucide-react';
+import { Play, X, Sparkles, AlertTriangle } from 'lucide-react';
 import { 
   TaskProfile, MissionAssessment, CalendarEvent, EmailDraft, 
   BootstrapOutput, StuckChatMessage, Debrief, AmbientDeadlines, CompletedSession 
@@ -18,6 +18,7 @@ import CrisisStepsView from './components/CrisisStepsView';
 import WorkspaceView from './components/WorkspaceView';
 import DebriefView from './components/DebriefView';
 import SessionHistory from './components/SessionHistory';
+import { initAuth, googleSignIn, logout } from './lib/firebase';
 
 // Simple API fetching helper
 const apiCall = async (endpoint: string, body: any) => {
@@ -48,6 +49,11 @@ export default function App() {
   const [isDemoActive, setIsDemoActive] = useState(false);
   const [showDemoPopcard, setShowDemoPopcard] = useState(true);
   const [popcardTimeLeft, setPopcardTimeLeft] = useState(30);
+
+  // Active run tracker to prevent background tasks from changing state after cancellation
+  const activePipelineRunId = useRef<number>(0);
+  const [showAbortModal, setShowAbortModal] = useState(false);
+  const [pendingNavigationTarget, setPendingNavigationTarget] = useState<string | null>(null);
   
   // App states
   const [situationText, setSituationText] = useState('');
@@ -213,6 +219,48 @@ export default function App() {
     setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`]);
   };
 
+  // Google Workspace Authentication state and handlers
+  const [googleUser, setGoogleUser] = useState<any>(null);
+  const [googleToken, setGoogleToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = initAuth(
+      (user, token) => {
+        setGoogleUser(user);
+        setGoogleToken(token);
+        if (user) {
+          addLog(`Workspace Auth: Google account ${user.email} connected.`);
+        }
+      },
+      () => {
+        setGoogleUser(null);
+        setGoogleToken(null);
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      const result = await googleSignIn();
+      if (result) {
+        setGoogleUser(result.user);
+        setGoogleToken(result.accessToken);
+        addLog("Workspace Auth: Google Workspace linked successfully.");
+      }
+    } catch (err) {
+      console.error("Sign-in failed", err);
+      addLog("Workspace Auth ERROR: Secure linking rejected or cancelled.");
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    await logout();
+    setGoogleUser(null);
+    setGoogleToken(null);
+    addLog("Workspace Auth: Google account disconnected.");
+  };
+
   // Toggle all skippable/deferrable calendar events in bulk
   const handleToggleAllCalendarEvents = (select: boolean) => {
     const updated = { ...selectedCalendarEvents };
@@ -229,6 +277,7 @@ export default function App() {
   const handleStartPipeline = async (inputText: string, mode: 'crisis' | 'plan') => {
     if (!inputText.trim()) return;
     setIsSubmitting(true);
+    const runId = ++activePipelineRunId.current;
     setSituationText(inputText);
     setCurrentView('pipeline');
     setLogs([]);
@@ -256,6 +305,7 @@ export default function App() {
       setPipelineSteps(() => initialSteps.map((s, idx) => idx === 0 ? { ...s, status: 'running' } : s));
       addLog(mode === 'plan' ? "Intake Agent: Booting up Gemini 3.5 Flash semantic milestone parser..." : "Intake Agent: Booting up Gemini 3.5 Flash semantic parser...");
       const intakeRes = await apiCall('/api/intake', { situation: inputText, currentDate: currentTime.toISOString() });
+      if (runId !== activePipelineRunId.current) return;
       setTaskProfile(intakeRes.profile);
       setPipelineSteps(prev => prev.map((s, idx) => idx === 0 ? { ...s, status: 'success' } : s));
       addLog(`Intake Agent: Successfully extracted task. Category: ${intakeRes.profile.taskType}, Effort: ${intakeRes.profile.effortLevel}, Progress: ${intakeRes.profile.currentProgress}`);
@@ -265,6 +315,7 @@ export default function App() {
       setPipelineSteps(prev => prev.map((s, idx) => idx === 1 ? { ...s, status: 'running' } : s));
       addLog("Mission Assessment: Calculating project deadline feasibility metrics...");
       const assessRes = await apiCall('/api/assess', { profile: intakeRes.profile, currentDate: currentTime.toISOString() });
+      if (runId !== activePipelineRunId.current) return;
       setAssessment(assessRes.assessment);
       setPipelineSteps(prev => prev.map((s, idx) => idx === 1 ? { ...s, status: 'success' } : s));
       addLog(`Mission Assessment: Completion Probability determined at ${assessRes.assessment.completionProbability}%. Strategy recommended: ${assessRes.assessment.recommendedStrategy}`);
@@ -283,7 +334,8 @@ export default function App() {
       setCurrentPipelineStep(2);
       setPipelineSteps(prev => prev.map((s, idx) => idx === 2 ? { ...s, status: 'running' } : s));
       addLog("Calendar Agent: Mapping user schedule constraints & filtering skippable syncs...");
-      const calRes = await apiCall('/api/calendar', { profile: intakeRes.profile, currentDate: currentTime.toISOString() });
+      const calRes = await apiCall('/api/calendar', { profile: intakeRes.profile, currentDate: currentTime.toISOString(), googleToken });
+      if (runId !== activePipelineRunId.current) return;
       setCalendarEvents(calRes.events);
       // Pre-select skippable and deferrable to be cleared
       const initialSelections: Record<string, boolean> = {};
@@ -301,8 +353,10 @@ export default function App() {
       const gmailRes = await apiCall('/api/gmail', { 
         profile: intakeRes.profile, 
         events: calRes.events, 
-        isDamageControl: assessRes.assessment.recommendedStrategy === 'NEGOTIATE' 
+        isDamageControl: assessRes.assessment.recommendedStrategy === 'NEGOTIATE',
+        googleToken
       });
+      if (runId !== activePipelineRunId.current) return;
       setEmailDrafts(gmailRes.emails);
       const initialEmails: Record<string, string> = {};
       gmailRes.emails.forEach((em: EmailDraft) => {
@@ -317,15 +371,17 @@ export default function App() {
       setPipelineSteps(prev => prev.map((s, idx) => idx === 4 ? { ...s, status: 'running' } : s));
       addLog("Bootstrap Agent: Activating Google Search Grounding to assemble raw outlines and live metrics...");
       const bootstrapRes = await apiCall('/api/bootstrap', { profile: intakeRes.profile });
+      if (runId !== activePipelineRunId.current) return;
       setBootstrapData(bootstrapRes.bootstrap);
       setPipelineSteps(prev => prev.map((s, idx) => idx === 4 ? { ...s, status: 'success' } : s));
       addLog(`Bootstrap Agent: Finished scaffolding "${bootstrapRes.bootstrap.title}" with real-time web facts.`);
 
       // COMPLETE & PROCEED TO ASSESSMENT CARD
       setTimeout(() => {
+        if (runId !== activePipelineRunId.current) return;
         setCurrentView('assessment');
         setIsSubmitting(false);
-      }, 1000);
+      }, 500);
 
     } catch (err) {
       console.error(err);
@@ -509,6 +565,7 @@ export default function App() {
     setCurrentView('pipeline');
     setLogs([]);
     setCurrentPipelineStep(0);
+    const runId = ++activePipelineRunId.current;
     setSituationText("Series A Pitch Deck due tomorrow at 9 AM. Need content structure, market stats, and to reschedule conflicts.");
 
     const initialSteps = [
@@ -527,7 +584,8 @@ export default function App() {
       // Step 1: Intake Parsing
       setPipelineSteps(steps => steps.map((s, idx) => idx === 0 ? { ...s, status: 'running' } : s));
       addLog("Intake Agent (Demo): Booting up Gemini 3.5 Flash semantic parser in simulation mode...");
-      await sleep(1500);
+      await sleep(350);
+      if (runId !== activePipelineRunId.current) return;
       
       const demoProfile: TaskProfile = {
         deadline: 'Tomorrow 9:00 AM',
@@ -549,7 +607,8 @@ export default function App() {
       setCurrentPipelineStep(1);
       setPipelineSteps(steps => steps.map((s, idx) => idx === 1 ? { ...s, status: 'running' } : s));
       addLog("Mission Assessment (Demo): Running diagnostic on 4.5-hour deadline feasibility...");
-      await sleep(1500);
+      await sleep(350);
+      if (runId !== activePipelineRunId.current) return;
 
       const demoAssessment: MissionAssessment = {
         completionProbability: 88,
@@ -578,7 +637,8 @@ export default function App() {
       setCurrentPipelineStep(2);
       setPipelineSteps(steps => steps.map((s, idx) => idx === 2 ? { ...s, status: 'running' } : s));
       addLog("Calendar Agent (Demo): Accessing Calendar API to triage 4 schedule items...");
-      await sleep(1500);
+      await sleep(350);
+      if (runId !== activePipelineRunId.current) return;
 
       const demoEvents: CalendarEvent[] = [
         {
@@ -623,7 +683,8 @@ export default function App() {
       setCurrentPipelineStep(3);
       setPipelineSteps(steps => steps.map((s, idx) => idx === 3 ? { ...s, status: 'running' } : s));
       addLog("Gmail Agent (Demo): Drafting polite rescheduling messages in Google Workspace drafts...");
-      await sleep(1500);
+      await sleep(350);
+      if (runId !== activePipelineRunId.current) return;
 
       const demoEmails: EmailDraft[] = [
         {
@@ -661,7 +722,8 @@ export default function App() {
       setCurrentPipelineStep(4);
       setPipelineSteps(steps => steps.map((s, idx) => idx === 4 ? { ...s, status: 'running' } : s));
       addLog("Bootstrap Agent (Demo): Querying live market indices and VC guidelines using Search Grounding...");
-      await sleep(1500);
+      await sleep(350);
+      if (runId !== activePipelineRunId.current) return;
 
       const demoBootstrap: BootstrapOutput = {
         title: "Series A Investor Pitch Deck",
@@ -729,7 +791,8 @@ export default function App() {
       setPipelineSteps(steps => steps.map((s, idx) => idx === 4 ? { ...s, status: 'success' } : s));
       addLog("Bootstrap Agent (Demo): Workspace initialized with Google Search Grounded facts.");
 
-      await sleep(1000);
+      await sleep(350);
+      if (runId !== activePipelineRunId.current) return;
       setCurrentView('assessment');
       setIsSubmitting(false);
 
@@ -794,6 +857,15 @@ export default function App() {
     }
   };
 
+  const handleSetCurrentView = (view: any) => {
+    if (isSubmitting && currentView === 'pipeline' && view !== 'pipeline') {
+      setPendingNavigationTarget(view);
+      setShowAbortModal(true);
+    } else {
+      setCurrentView(view);
+    }
+  };
+
   const backConfig = getHeaderBackConfig();
 
   return (
@@ -809,15 +881,21 @@ export default function App() {
       {/* Dynamic Header */}
       <Header
         currentView={currentView}
-        setCurrentView={setCurrentView}
+        setCurrentView={handleSetCurrentView}
         geminiActive={geminiActive}
         currentTime={currentTime}
         onLaunchClutch={handleLaunchClutchButton}
         hasActiveWorkspace={!!bootstrapData && currentView !== 'home'}
         darkMode={darkMode}
         onToggleDarkMode={() => setDarkMode(!darkMode)}
-        onBack={backConfig.onBack}
+        onBack={isSubmitting && currentView === 'pipeline' ? () => {
+          setPendingNavigationTarget('modes');
+          setShowAbortModal(true);
+        } : backConfig.onBack}
         backLabel={backConfig.label}
+        googleUser={googleUser}
+        onGoogleSignIn={handleGoogleSignIn}
+        onGoogleSignOut={handleGoogleSignOut}
       />
 
       {/* Main Container */}
@@ -918,6 +996,8 @@ export default function App() {
               onSubmit={(text) => handleStartPipeline(text, selectedMode === 'crisis' ? 'crisis' : 'plan')}
               onCancel={() => setCurrentView('modes')}
               onBackToModes={() => setCurrentView('modes')}
+              googleUser={googleUser}
+              onGoogleSignIn={handleGoogleSignIn}
             />
           )}
 
@@ -956,9 +1036,32 @@ export default function App() {
               onToggleCalendarEvent={(id) => setSelectedCalendarEvents(prev => ({ ...prev, [id]: !prev[id] }))}
               onToggleAllCalendarEvents={handleToggleAllCalendarEvents}
               calendarApproved={calendarApproved}
-              onApproveCalendar={() => {
+              onApproveCalendar={async () => {
                 setCalendarApproved(true);
                 addLog(selectedMode === 'plan' ? "Calendar Agent: Focus reservation blocks scheduled in Google Calendar." : "Calendar Agent: Successfully submitted Google Calendar event optimizations.");
+                
+                if (googleToken) {
+                  addLog("Calendar Agent: Synchronizing optimizations to your Google Calendar...");
+                  try {
+                    const eventsToClear = Object.entries(selectedCalendarEvents)
+                      .filter(([_, isSelected]) => isSelected)
+                      .map(([id]) => id);
+
+                    const res = await apiCall('/api/calendar/sync', {
+                      googleToken,
+                      eventsToClear,
+                      taskTitle: taskProfile?.originalInput || 'Clutch Deep Focus Block'
+                    });
+                    if (res && res.success) {
+                      addLog("Calendar Agent: Google Calendar synchronized successfully! Focus blocks added, conflicting meetings optimized.");
+                    } else {
+                      addLog("Calendar Agent: Sync completed with warnings.");
+                    }
+                  } catch (err) {
+                    console.error("Calendar sync error", err);
+                    addLog("Calendar Agent ERROR: Synchronization failed. Fallback simulation remains active.");
+                  }
+                }
               }}
               emailDrafts={emailDrafts}
               editingEmails={editingEmails}
@@ -969,9 +1072,33 @@ export default function App() {
                 addLog("Gmail Agent: Draft reset to original system recommendations.");
               }}
               emailsSynced={emailsSynced}
-              onSyncEmails={() => {
+              onSyncEmails={async () => {
                 setEmailsSynced(true);
                 addLog(selectedMode === 'plan' ? "Gmail Agent: Proactive drafts integrated successfully into Gmail inbox." : "Gmail Agent: Sync drafts triggered. Drafts integrated successfully into Gmail inbox.");
+                
+                if (googleToken) {
+                  addLog("Gmail Agent: Syncing drafts directly to your Gmail draft folder...");
+                  try {
+                    const draftsToSync = emailDrafts.map(d => ({
+                      recipient: d.recipient,
+                      subject: d.subject,
+                      body: editingEmails[d.id] || d.body
+                    }));
+
+                    const res = await apiCall('/api/gmail/draft', {
+                      googleToken,
+                      drafts: draftsToSync
+                    });
+                    if (res && res.success) {
+                      addLog(`Gmail Agent: Successfully created ${res.createdCount} draft(s) in your Gmail account!`);
+                    } else {
+                      addLog("Gmail Agent: Draft creation completed with warnings.");
+                    }
+                  } catch (err) {
+                    console.error("Gmail sync error", err);
+                    addLog("Gmail Agent ERROR: Sync failed. Fallback templates copied to clipboard.");
+                  }
+                }
               }}
               bootstrapData={bootstrapData}
               onLaunchWorkspace={() => {
@@ -1081,6 +1208,66 @@ export default function App() {
               />
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAbortModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAbortModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            
+            {/* Modal Card */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-white dark:bg-[#1C1B19] border border-[#E6E5E0] dark:border-[#2E2D2A] rounded-[2rem] p-6 max-w-md w-full shadow-2xl relative z-10 transition-colors duration-300 space-y-5 text-left"
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-red-500/10 text-[#D95D39] rounded-2xl border border-red-500/20">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <h3 className="text-base font-black tracking-tight text-[#1C1C1A] dark:text-[#F5F4F0]">
+                    Abort Agent Operations?
+                  </h3>
+                  <p className="text-xs text-[#71706C] dark:text-[#A19F9A] leading-relaxed">
+                    A multi-agent coordination pipeline is actively running in the background. Aborting will stop all active tasks and discard current progress.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowAbortModal(false)}
+                  className="flex-1 bg-[#FAF9F6] dark:bg-[#252422] hover:bg-[#FAF9F6]/80 dark:hover:bg-[#252422]/80 border border-[#E6E5E0] dark:border-[#2E2D2A] text-[#1C1C1A] dark:text-[#F5F4F0] text-xs font-bold py-3 rounded-xl transition-all cursor-pointer"
+                >
+                  Keep Running
+                </button>
+                <button
+                  onClick={() => {
+                    // Abort current pipeline run by incrementing runId
+                    activePipelineRunId.current++;
+                    setIsSubmitting(false);
+                    setShowAbortModal(false);
+                    if (pendingNavigationTarget) {
+                      setCurrentView(pendingNavigationTarget as any);
+                    }
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-3 rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Abort Operations
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

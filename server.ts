@@ -60,9 +60,25 @@ async function generateContentWithRetry(params: {
         throw new Error("Received empty response from Gemini API");
       } catch (err: any) {
         lastError = err;
-        const status = err.status || (err.error?.code) || 0;
+        const status = err.status || (err.error?.code) || err.statusCode || 0;
         console.warn(`[Gemini] Attempt with model ${model} failed (status: ${status}):`, err.message || err);
         
+        // Fast fail on Quota/429/RESOURCE_EXHAUSTED
+        const errMsg = String(err.message || '').toLowerCase();
+        const errJsonStr = JSON.stringify(err).toLowerCase();
+        const isQuotaExhausted = status === 429 || 
+                                 errMsg.includes('429') || 
+                                 errMsg.includes('quota') || 
+                                 errMsg.includes('exhausted') || 
+                                 errJsonStr.includes('429') || 
+                                 errJsonStr.includes('quota') || 
+                                 errJsonStr.includes('exhausted');
+
+        if (isQuotaExhausted) {
+          console.warn(`[Gemini] Quota exhausted (429/RESOURCE_EXHAUSTED). Skipping retries to trigger fallback simulation immediately.`);
+          throw err;
+        }
+
         // If it's a Bad Request (400), don't waste time retrying this model, switch immediately
         if (status === 400) {
           console.warn(`[Gemini] Bad Request (400) - likely unsupported parameter/schema. Switching to next model...`);
@@ -347,9 +363,78 @@ app.post('/api/assess', async (req, res) => {
   });
 });
 
+async function fetchRealCalendarEvents(googleToken: string, currentDate: string): Promise<any[]> {
+  try {
+    const calendarUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(currentDate || new Date().toISOString())}&singleEvents=true&orderBy=startTime&maxResults=15`;
+    const calRes = await fetch(calendarUrl, {
+      headers: { 'Authorization': `Bearer ${googleToken}` }
+    });
+    if (!calRes.ok) {
+      console.error(`Google Calendar API error:`, await calRes.text());
+      return [];
+    }
+    const data = await calRes.json();
+    return (data.items || []).map((ev: any, idx: number) => ({
+      id: ev.id || `event-${idx}`,
+      title: ev.summary || 'Untitled Event',
+      start: ev.start?.dateTime || ev.start?.date || new Date().toISOString(),
+      end: ev.end?.dateTime || ev.end?.date || new Date().toISOString()
+    }));
+  } catch (err) {
+    console.error('Failed to fetch Google Calendar events:', err);
+    return [];
+  }
+}
+
 // Endpoint 3: Calendar Triage
 app.post('/api/calendar', async (req, res) => {
-  const { profile, currentDate } = req.body;
+  const { profile, currentDate, googleToken } = req.body;
+
+  let inputEvents: any[] = [];
+  let isRealCalendar = false;
+
+  if (googleToken) {
+    inputEvents = await fetchRealCalendarEvents(googleToken, currentDate);
+    if (inputEvents.length > 0) {
+      isRealCalendar = true;
+    }
+  }
+
+  // If no real events were fetched, or token wasn't provided, use mock/fallback simulation events
+  if (inputEvents.length === 0) {
+    const baseDate = currentDate ? new Date(currentDate) : new Date();
+    const formatOffset = (hours: number) => {
+      const d = new Date(baseDate.getTime() + hours * 60 * 60 * 1000);
+      return d.toISOString();
+    };
+
+    inputEvents = [
+      {
+        id: 'event-1',
+        title: 'Weekly Status Sync with Marketing Team',
+        start: formatOffset(1),
+        end: formatOffset(1.5)
+      },
+      {
+        id: 'event-2',
+        title: '1-on-1 Catch-up with Sarah',
+        start: formatOffset(2),
+        end: formatOffset(2.5)
+      },
+      {
+        id: 'event-3',
+        title: 'Design Critique & UI Feedback Session',
+        start: formatOffset(3.5),
+        end: formatOffset(4.5)
+      },
+      {
+        id: 'event-4',
+        title: 'Urgent Client Alignment Call (Acme Corp)',
+        start: formatOffset(5),
+        end: formatOffset(5.5)
+      }
+    ];
+  }
 
   const ai = getGemini();
   if (ai) {
@@ -357,12 +442,12 @@ app.post('/api/calendar', async (req, res) => {
       const response = await generateContentWithRetry({
         model: 'gemini-3.5-flash',
         contents: `Review this task profile: ${JSON.stringify(profile)}.
-        Pretend there is a list of calendar events for the user in the next 12-24 hours.
-        Return a list of 4-5 events. Classify each event as:
+        And these calendar events: ${JSON.stringify(inputEvents)}.
+        Return a list of these events. Classify each event as:
         - 'critical' (must keep, e.g. urgent client calls, medical)
         - 'skippable' (can skip/cancel, e.g. status updates, informal 1on1s)
         - 'deferrable' (can postpone, e.g. project kickoffs, design critiques)
-        Provide realistic titles and start/end times relative to: ${currentDate || new Date().toISOString()}`,
+        Provide realistic classifications. Keep the original 'id', 'title', 'start', and 'end' unchanged. Return only the events array with classifications.`,
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -373,6 +458,7 @@ app.post('/api/calendar', async (req, res) => {
                 items: {
                   type: Type.OBJECT,
                   properties: {
+                    id: { type: Type.STRING },
                     title: { type: Type.STRING },
                     start: { type: Type.STRING },
                     end: { type: Type.STRING },
@@ -381,7 +467,7 @@ app.post('/api/calendar', async (req, res) => {
                       enum: ['critical', 'skippable', 'deferrable']
                     }
                   },
-                  required: ['title', 'start', 'end', 'classification']
+                  required: ['id', 'title', 'start', 'end', 'classification']
                 }
               }
             },
@@ -392,13 +478,10 @@ app.post('/api/calendar', async (req, res) => {
 
       if (response.text) {
         const parsed = JSON.parse(response.text.trim());
-        const mappedEvents = parsed.events.map((e: any, idx: number) => ({
-          id: `event-${idx}`,
-          ...e
-        }));
         return res.json({
           geminiUsed: true,
-          events: mappedEvents
+          events: parsed.events,
+          isRealCalendar
         });
       }
     } catch (err: any) {
@@ -406,47 +489,40 @@ app.post('/api/calendar', async (req, res) => {
     }
   }
 
-  // Fallback Simulation Engine
-  const baseDate = currentDate ? new Date(currentDate) : new Date();
-  const formatOffset = (hours: number) => {
-    const d = new Date(baseDate.getTime() + hours * 60 * 60 * 1000);
-    return d.toISOString();
-  };
-
-  const mockEvents = [
-    {
-      id: 'event-1',
-      title: 'Weekly Status Sync with Marketing Team',
-      start: formatOffset(1),
-      end: formatOffset(1.5),
-      classification: 'skippable' as const
-    },
-    {
-      id: 'event-2',
-      title: '1-on-1 Catch-up with Sarah',
-      start: formatOffset(2),
-      end: formatOffset(2.5),
-      classification: 'skippable' as const
-    },
-    {
-      id: 'event-3',
-      title: 'Design Critique & UI Feedback Session',
-      start: formatOffset(3.5),
-      end: formatOffset(4.5),
-      classification: 'deferrable' as const
-    },
-    {
-      id: 'event-4',
-      title: 'Urgent Client Alignment Call (Acme Corp)',
-      start: formatOffset(5),
-      end: formatOffset(5.5),
-      classification: 'critical' as const
+  // Fallback Classification Local Heuristics
+  const mappedEvents = inputEvents.map((ev) => {
+    const titleLower = ev.title.toLowerCase();
+    let classification: 'critical' | 'skippable' | 'deferrable' = 'critical';
+    if (
+      titleLower.includes('sync') ||
+      titleLower.includes('1-on-1') ||
+      titleLower.includes('1on1') ||
+      titleLower.includes('catch-up') ||
+      titleLower.includes('catch up') ||
+      titleLower.includes('weekly') ||
+      titleLower.includes('coffee') ||
+      titleLower.includes('standup')
+    ) {
+      classification = 'skippable';
+    } else if (
+      titleLower.includes('critique') ||
+      titleLower.includes('review') ||
+      titleLower.includes('kickoff') ||
+      titleLower.includes('design') ||
+      titleLower.includes('planning')
+    ) {
+      classification = 'deferrable';
     }
-  ];
+    return {
+      ...ev,
+      classification
+    };
+  });
 
   res.json({
     geminiUsed: false,
-    events: mockEvents
+    events: mappedEvents,
+    isRealCalendar
   });
 });
 
@@ -537,6 +613,119 @@ app.post('/api/gmail', async (req, res) => {
     geminiUsed: false,
     emails
   });
+});
+
+function encodeRawEmail(to: string, subject: string, body: string): string {
+  const emailLines = [
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `Content-Type: text/plain; charset=utf-8`,
+    `MIME-Version: 1.0`,
+    ``,
+    body
+  ];
+  const emailStr = emailLines.join('\r\n');
+  return Buffer.from(emailStr, 'utf-8')
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+// Endpoint 4b: Gmail draft sync
+app.post('/api/gmail/draft', async (req, res) => {
+  const { googleToken, drafts } = req.body;
+  if (!googleToken) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    const createdDraftIds = [];
+    for (const d of drafts) {
+      const raw = encodeRawEmail(d.recipient, d.subject, d.body);
+      const draftUrl = `https://gmail.googleapis.com/gmail/v1/users/me/drafts`;
+      const draftRes = await fetch(draftUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${googleToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: { raw }
+        })
+      });
+
+      if (draftRes.ok) {
+        const data = await draftRes.json();
+        createdDraftIds.push(data.id);
+      } else {
+        console.error(`Gmail API error creating draft:`, await draftRes.text());
+      }
+    }
+
+    res.json({ success: true, createdCount: createdDraftIds.length });
+  } catch (err) {
+    console.error('Gmail sync error:', err);
+    res.status(500).json({ error: 'Failed to sync drafts' });
+  }
+});
+
+// Endpoint 4c: Calendar sync / scheduling
+app.post('/api/calendar/sync', async (req, res) => {
+  const { googleToken, eventsToClear, taskTitle } = req.body;
+  if (!googleToken) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  try {
+    // 1. Delete/decline events that are selected to be cleared
+    for (const evId of eventsToClear) {
+      if (!evId || evId.startsWith('event-')) continue; // skip mock IDs
+      try {
+        const deleteUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events/${evId}`;
+        const delRes = await fetch(deleteUrl, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${googleToken}` }
+        });
+        if (!delRes.ok) {
+          console.warn(`Could not delete event ${evId}:`, await delRes.text());
+        }
+      } catch (err) {
+        console.error(`Error deleting event ${evId}:`, err);
+      }
+    }
+
+    // 2. Insert a beautiful block of "Deep Work: [Task]"
+    const createUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events`;
+    const now = new Date();
+    const end = new Date(now.getTime() + 3 * 60 * 60 * 1000); // 3 hours slot
+    const eventBody = {
+      summary: `Deep Work: ${taskTitle || 'Clutch Deep Focus Block'}`,
+      description: 'Automatically scheduled by Clutch to protect high-stakes delivery window.',
+      start: { dateTime: now.toISOString() },
+      end: { dateTime: end.toISOString() },
+      colorId: '5' // Banana yellow/Amber to make it stand out
+    };
+
+    const insertRes = await fetch(createUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${googleToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(eventBody)
+    });
+
+    if (insertRes.ok) {
+      return res.json({ success: true, deepWorkCreated: true });
+    } else {
+      console.error(`Failed to insert deep work event:`, await insertRes.text());
+      return res.json({ success: true, deepWorkCreated: false });
+    }
+  } catch (err) {
+    console.error('Calendar sync error:', err);
+    res.status(500).json({ error: 'Failed to apply calendar updates' });
+  }
 });
 
 // Endpoint 5: Bootstrap Agent with Search Grounding!

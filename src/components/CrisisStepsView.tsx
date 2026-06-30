@@ -5,6 +5,25 @@ import {
   Calendar, Mail, FileText, Check, X, Play, ExternalLink, HelpCircle, ChevronRight, Sliders, Copy, RotateCcw 
 } from 'lucide-react';
 
+const GoogleCalendarLogo = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="4" width="20" height="17" rx="3" fill="#4285F4" />
+    <path d="M2 4V8H22V4C22 2.9 21.1 2 20 2H4C2.9 2 2 2.9 2 4Z" fill="#34A853" />
+    <rect x="6" y="10" width="12" height="8" rx="1.5" fill="white" />
+    <text x="12" y="17" fill="#4285F4" fontSize="8" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">31</text>
+  </svg>
+);
+
+const GmailLogo = ({ className = "w-5 h-5" }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4Z" fill="#F2F2F2" />
+    <path d="M20 4H4C2.9 4 2 4.9 2 6V9L12 14L22 9V6C22 4.9 21.1 4 20 4Z" fill="#EA4335" />
+    <path d="M2 9V18C2 19.1 2.9 20 4 20H6V11L2 9Z" fill="#FBBC05" />
+    <path d="M22 9V18C22 19.1 21.1 20 20 20H18V11L22 9Z" fill="#34A853" />
+    <path d="M18 20H6V11L12 14L18 11V20Z" fill="#4285F4" />
+  </svg>
+);
+
 interface CrisisStepsViewProps {
   key?: string;
   assessment: any;
@@ -87,19 +106,19 @@ export default function CrisisStepsView({
           <div className="bg-white dark:bg-[#1C1B19] border border-[#E6E5E0] dark:border-[#2E2D2A] ballpark-shadow rounded-[2rem] p-6 sm:p-8 space-y-6 transition-colors duration-300">
             <div className="flex items-center justify-between border-b border-[#FAF9F6] dark:border-[#2E2D2A] pb-4 transition-colors duration-300">
               <div className="flex items-center gap-3">
-                <div className="bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] p-2.5 rounded-xl text-indigo-500 dark:text-indigo-400 transition-colors duration-300">
-                  <Calendar className="w-5 h-5" />
+                <div className="bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] p-2.5 rounded-xl transition-colors duration-300">
+                  <GoogleCalendarLogo className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] transition-colors duration-300">Step 1</span>
+                  <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] transition-colors duration-300">Step 1 • Google Calendar Agent</span>
                   <h3 className="text-base font-bold text-[#1C1C1A] dark:text-[#F5F4F0] transition-colors duration-300">
                     {isPlanMode ? 'Focus Blocks Reservation' : 'Calendar Optimization'}
                   </h3>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 text-[9px] font-sans font-bold uppercase px-2.5 py-1 rounded-full border border-blue-500/20 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-500/10 transition-colors duration-300">
-                <Calendar className="w-2.5 h-2.5 text-blue-500" />
-                Google Calendar Sync
+              <span className="inline-flex items-center gap-1.5 text-[9px] font-sans font-bold uppercase px-2.5 py-1.5 rounded-full border border-blue-500/20 text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-500/10 transition-colors duration-300 shadow-sm">
+                <GoogleCalendarLogo className="w-3.5 h-3.5" />
+                Google Calendar Integration
               </span>
             </div>
 
@@ -146,14 +165,12 @@ export default function CrisisStepsView({
                   >
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${
-                          ev.classification === 'critical' ? 'bg-[#71706C] dark:bg-[#5E5D59]' : ev.classification === 'skippable' ? 'bg-[#D95D39]' : 'bg-indigo-500'
-                        }`} />
+                        <GoogleCalendarLogo className="w-4 h-4 flex-shrink-0" />
                         <h4 className="text-xs font-bold text-[#1C1C1A] dark:text-[#F5F4F0] transition-colors duration-300">
                           {isPlanMode && ev.classification !== 'critical' ? `[Focus Reserve] ${ev.title}` : ev.title}
                         </h4>
                       </div>
-                      <span className="text-[10px] text-[#71706C] dark:text-[#A19F9A] transition-colors duration-300">
+                      <span className="text-[10px] text-[#71706C] dark:text-[#A19F9A] transition-colors duration-300 pl-6">
                         {new Date(ev.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {new Date(ev.end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </div>
@@ -193,7 +210,7 @@ export default function CrisisStepsView({
                     : 'bg-[#1C1C1A] dark:bg-[#F5F4F0] hover:bg-[#32312E] dark:hover:bg-[#E2E1DD] text-white dark:text-[#121211] border-transparent'
                 }`}
               >
-                {calendarApproved ? <Check className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+                {calendarApproved ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <GoogleCalendarLogo className="w-4 h-4" />}
                 {calendarApproved 
                   ? (isPlanMode ? 'Google Calendar focus blocks reserved successfully' : 'Google Calendar optimized successfully') 
                   : (isPlanMode ? 'Reserve focus blocks on Google Calendar' : 'Clear conflict slots on Google Calendar')}
@@ -205,19 +222,19 @@ export default function CrisisStepsView({
           <div className="bg-white dark:bg-[#1C1B19] border border-[#E6E5E0] dark:border-[#2E2D2A] ballpark-shadow rounded-[2rem] p-6 sm:p-8 space-y-6 transition-colors duration-300">
             <div className="flex items-center justify-between border-b border-[#FAF9F6] dark:border-[#2E2D2A] pb-4 transition-colors duration-300">
               <div className="flex items-center gap-3">
-                <div className="bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] p-2.5 rounded-xl text-red-500 dark:text-red-400 transition-colors duration-300">
-                  <Mail className="w-5 h-5" />
+                <div className="bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] p-2.5 rounded-xl transition-colors duration-300">
+                  <GmailLogo className="w-5 h-5" />
                 </div>
                 <div>
-                  <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] transition-colors duration-300">Step 2</span>
+                  <span className="text-[9px] font-sans font-bold uppercase tracking-widest text-[#71706C] dark:text-[#A19F9A] transition-colors duration-300">Step 2 • Gmail Agent</span>
                   <h3 className="text-base font-bold text-[#1C1C1A] dark:text-[#F5F4F0] transition-colors duration-300">
                     {isPlanMode ? 'Stakeholder Collaboration & Alignment' : 'Stakeholder Communications'}
                   </h3>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1.5 text-[9px] font-sans font-bold uppercase px-2.5 py-1 rounded-full border border-rose-500/20 text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-500/10 transition-colors duration-300">
-                <Mail className="w-2.5 h-2.5 text-rose-500" />
-                Gmail Drafts
+              <span className="inline-flex items-center gap-1.5 text-[9px] font-sans font-bold uppercase px-2.5 py-1.5 rounded-full border border-rose-500/20 text-rose-600 dark:text-rose-400 bg-rose-50/50 dark:bg-rose-500/10 transition-colors duration-300 shadow-sm">
+                <GmailLogo className="w-3.5 h-3.5" />
+                Gmail Workspace Sync
               </span>
             </div>
 
@@ -239,8 +256,12 @@ export default function CrisisStepsView({
                 return (
                   <div key={draft.id} className="border border-[#E6E5E0] dark:border-[#2E2D2A] rounded-2xl overflow-hidden bg-[#FAF9F6]/40 dark:bg-[#252422]/40 shadow-sm transition-colors duration-300">
                     <div className="bg-[#FAF9F6] dark:bg-[#252422] px-4 py-2.5 text-[10px] border-b border-[#E6E5E0] dark:border-[#2E2D2A] text-[#71706C] dark:text-[#A19F9A] flex flex-col sm:flex-row sm:items-center justify-between gap-2 font-sans transition-colors duration-300">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <span><strong className="text-[#1C1C1A] dark:text-[#F5F4F0] transition-colors duration-300">To:</strong> {draft.recipient}</span>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 items-start sm:items-center">
+                        <div className="flex items-center gap-1 bg-rose-500/5 dark:bg-rose-500/10 border border-rose-500/10 px-1.5 py-0.5 rounded text-[8px] text-rose-600 dark:text-rose-400 font-bold uppercase flex-shrink-0">
+                          <GmailLogo className="w-3 h-3" />
+                          <span>Gmail Draft</span>
+                        </div>
+                        <span className="mt-1 sm:mt-0"><strong className="text-[#1C1C1A] dark:text-[#F5F4F0] transition-colors duration-300">To:</strong> {draft.recipient}</span>
                         <span className="hidden sm:inline text-[#E6E5E0] dark:text-[#2E2D2A]">|</span>
                         <span><strong className="text-[#1C1C1A] dark:text-[#F5F4F0] transition-colors duration-300">Subject:</strong> {displaySubject}</span>
                       </div>
@@ -297,7 +318,7 @@ export default function CrisisStepsView({
                     : 'bg-[#1C1C1A] dark:bg-[#F5F4F0] hover:bg-[#32312E] dark:hover:bg-[#E2E1DD] text-white dark:text-[#121211] border-transparent'
                 }`}
               >
-                {emailsSynced ? <Check className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+                {emailsSynced ? <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <GmailLogo className="w-4 h-4" />}
                 {emailsSynced 
                   ? (isPlanMode ? 'Proactive drafts synced to Gmail folder' : 'Diplomatic drafts synced to Gmail folder') 
                   : (isPlanMode ? 'Sync proactive alignment drafts to Gmail' : 'Sync diplomatic drafts to Gmail Account')}
