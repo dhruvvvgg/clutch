@@ -8,7 +8,7 @@
 
 Clutch is an autonomous productivity agent that doesn't remind you about deadlines — it acts on them. Built for the Google AI Studio Hackathon, Problem Statement 1: *The Last-Minute Life Saver*.
 
-[Live App](https://clutch-812031856437.asia-southeast1.run.app/) · [Demo Mode](#judge-demo-mode)
+[Live App](https://clutch-812031856437.asia-southeast1.run.app)
 
 ---
 
