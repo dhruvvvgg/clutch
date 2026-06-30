@@ -1,9 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithRedirect, GoogleAuthProvider, onAuthStateChanged, User, signOut, getRedirectResult } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const auth = getAuth(app);
 
 const provider = new GoogleAuthProvider();
 // Add required Workspace scopes
