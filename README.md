@@ -10,7 +10,6 @@ Clutch is an autonomous productivity agent that doesn't remind you about deadlin
 
 [Live App](https://clutch-812031856437.asia-southeast1.run.app)
 
----
 
 ## The Problem
 
@@ -18,7 +17,6 @@ Every productivity tool operates in the wrong moment. They remind you a task is 
 
 Clutch is built to act in that moment instead.
 
----
 
 ## What It Does
 
@@ -36,7 +34,6 @@ Before Clutch does anything else, it calculates an honest completion probability
 
 Most productivity tools are optimistic by default. Clutch is honest instead.
 
----
 
 ## Architecture
 
@@ -54,7 +51,6 @@ The Bootstrap Agent runs with **Google Search grounding** explicitly enabled, so
 
 Nothing writes to a calendar or sends an email without explicit user approval. Every agent prepares changes; the user confirms them.
 
----
 
 ## Tech Stack
 
@@ -64,7 +60,6 @@ Nothing writes to a calendar or sends an email without explicit user approval. E
 **Data** — Firebase Firestore (session history, debrief logs), Firebase Auth
 **Build** — Vite, esbuild, tsx, TypeScript end to end
 
----
 
 ## Google Technologies Used
 
@@ -78,7 +73,6 @@ Nothing writes to a calendar or sends an email without explicit user approval. E
 - **Google OAuth 2.0** — authentication
 - **Firebase** — Firestore + Auth
 
----
 
 ## Judge Demo Mode
 
@@ -86,7 +80,6 @@ Our app currently operates under Google's testing-mode OAuth restrictions — fu
 
 To make sure the full agent pipeline can still be evaluated, Clutch includes a **Demo Mode** accessible from the footer on any screen. It runs the complete Crisis Mode flow end to end — Intake through Mission Assessment, Calendar Agent, Gmail Agent, and Bootstrap Agent — without requiring OAuth completion.
 
----
 
 ## Running Locally
 
@@ -102,7 +95,6 @@ Set up your environment variables (Gemini API key, Firebase config, Google OAuth
 npm run dev
 ```
 
----
 
 ## Why "Clutch"
 
