@@ -224,7 +224,9 @@ export default function App() {
   const [googleToken, setGoogleToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = initAuth(
+    let unsubscribe: () => void;
+    
+    initAuth(
       (user, token) => {
         setGoogleUser(user);
         setGoogleToken(token);
@@ -236,8 +238,13 @@ export default function App() {
         setGoogleUser(null);
         setGoogleToken(null);
       }
-    );
-    return () => unsubscribe();
+    ).then(unsub => {
+      unsubscribe = unsub;
+    });
+    
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, []);
 
   const handleGoogleSignIn = async () => {
@@ -1130,6 +1137,8 @@ export default function App() {
               onAbort={() => handleOpenDebrief(false)}
               onMarkDone={() => handleOpenDebrief(true)}
               isDemoActive={isDemoActive}
+              googleToken={googleToken}
+              onGoogleSignIn={handleGoogleSignIn}
             />
           )}
 

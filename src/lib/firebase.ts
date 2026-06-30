@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { getAuth, signInWithRedirect, GoogleAuthProvider, onAuthStateChanged, User, signOut, getRedirectResult } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -10,6 +10,10 @@ const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/calendar');
 provider.addScope('https://www.googleapis.com/auth/calendar.events');
 provider.addScope('https://www.googleapis.com/auth/gmail.compose');
+provider.addScope('https://www.googleapis.com/auth/drive.file');
+provider.addScope('https://www.googleapis.com/auth/documents');
+provider.addScope('https://www.googleapis.com/auth/presentations');
+provider.addScope('https://www.googleapis.com/auth/spreadsheets');
 
 // Flag to indicate if we are in the middle of a sign-in flow.
 let isSigningIn = false;
@@ -17,15 +21,29 @@ let isSigningIn = false;
 let cachedAccessToken: string | null = null;
 
 // Initialize auth state listener. Call this on app load.
-export const initAuth = (
+export const initAuth = async (
   onAuthSuccess?: (user: User, token: string) => void,
   onAuthFailure?: () => void
 ) => {
+  // Handle redirect result on load
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        cachedAccessToken = credential.accessToken;
+      }
+    }
+  } catch (error) {
+    console.error('Redirect result error:', error);
+  }
+
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
       if (cachedAccessToken) {
         if (onAuthSuccess) onAuthSuccess(user, cachedAccessToken);
       } else {
+        // Try to get token again if needed or wait for re-sign in
         if (onAuthFailure) onAuthFailure();
       }
     } else {
@@ -39,14 +57,10 @@ export const initAuth = (
 export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
-    const credential = GoogleAuthProvider.credentialFromResult(result);
-    if (!credential?.accessToken) {
-      throw new Error('Failed to get access token from Firebase Auth');
-    }
-
-    cachedAccessToken = credential.accessToken;
-    return { user: result.user, accessToken: cachedAccessToken };
+    await signInWithRedirect(auth, provider);
+    // This will redirect, so this function won't return directly. 
+    // The redirect result is handled in initAuth.
+    return null;
   } catch (error: any) {
     console.error('Sign in error:', error);
     throw error;

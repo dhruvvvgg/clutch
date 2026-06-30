@@ -1077,6 +1077,74 @@ app.post('/api/debrief', async (req, res) => {
   });
 });
 
+// Endpoint 8: Google Workspace Integration
+app.post('/api/workspace/create', async (req, res) => {
+  const { googleToken, type, title } = req.body;
+  if (!googleToken) return res.status(401).json({ error: 'Auth required' });
+
+  let apiUrl = '';
+  let body: any = { title };
+
+  switch (type) {
+    case 'doc':
+      apiUrl = 'https://docs.googleapis.com/v1/documents';
+      break;
+    case 'slide':
+      apiUrl = 'https://slides.googleapis.com/v1/presentations';
+      break;
+    case 'sheet':
+      apiUrl = 'https://sheets.googleapis.com/v1/spreadsheets';
+      break;
+    default:
+      return res.status(400).json({ error: 'Invalid type' });
+  }
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${googleToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Google API error: ${await response.text()}`);
+    }
+    
+    const data = await response.json();
+    res.json({ success: true, file: data });
+  } catch (err) {
+    console.error('Workspace creation error:', err);
+    res.status(500).json({ error: 'Failed to create workspace file' });
+  }
+});
+
+// Endpoint 9: List files from Google Drive
+app.get('/api/workspace/files', async (req, res) => {
+  const googleToken = req.headers.authorization?.split(' ')[1];
+  if (!googleToken) return res.status(401).json({ error: 'Auth required' });
+
+  try {
+    const response = await fetch('https://www.googleapis.com/drive/v3/files?pageSize=10&orderBy=createdTime%20desc&fields=files(id,name,webViewLink,mimeType)', {
+      headers: {
+        'Authorization': `Bearer ${googleToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Google Drive API error: ${await response.text()}`);
+    }
+    
+    const data = await response.json();
+    res.json({ success: true, files: data.files });
+  } catch (err) {
+    console.error('Workspace list error:', err);
+    res.status(500).json({ error: 'Failed to list workspace files' });
+  }
+});
+
 // Serve frontend SPA
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

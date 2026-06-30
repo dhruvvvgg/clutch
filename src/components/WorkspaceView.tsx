@@ -20,6 +20,15 @@ interface WorkspaceViewProps {
   onAbort: () => void;
   onMarkDone: () => void;
   isDemoActive?: boolean;
+  googleToken: string | null;
+  onGoogleSignIn: () => void;
+}
+
+interface WorkspaceFile {
+  id: string;
+  name: string;
+  webViewLink: string;
+  mimeType: string;
 }
 
 export default function WorkspaceView({
@@ -35,8 +44,24 @@ export default function WorkspaceView({
   onAbort,
   onMarkDone,
   isDemoActive = false,
+  googleToken,
+  onGoogleSignIn,
 }: WorkspaceViewProps) {
   const [copiedSectionIdx, setCopiedSectionIdx] = useState<number | null>(null);
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+
+  useEffect(() => {
+    if (googleToken) {
+      fetch('/api/workspace/files', {
+        headers: { 'Authorization': `Bearer ${googleToken}` }
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) setFiles(data.files);
+        })
+        .catch(console.error);
+    }
+  }, [googleToken]);
   const [expansionTexts, setExpansionTexts] = useState<Record<number, string>>({});
 
   // Format seconds to HH:MM:SS
@@ -79,11 +104,78 @@ export default function WorkspaceView({
           </div>
           
           <div className="flex gap-2">
+            <button
+              onClick={async () => {
+                if (!googleToken) {
+                  onGoogleSignIn();
+                  return;
+                }
+                const res = await fetch('/api/workspace/create', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ googleToken, type: 'doc', title: bootstrapData.title })
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  setFiles(prev => [data.file, ...prev]);
+                  alert('Doc created!');
+                }
+              }}
+              className="bg-blue-500 text-white text-[9px] font-bold px-2 py-1 rounded"
+            >Doc</button>
+            <button
+              onClick={async () => {
+                if (!googleToken) {
+                  onGoogleSignIn();
+                  return;
+                }
+                const res = await fetch('/api/workspace/create', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ googleToken, type: 'slide', title: bootstrapData.title })
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  setFiles(prev => [data.file, ...prev]);
+                  alert('Slide created!');
+                }
+              }}
+              className="bg-yellow-500 text-white text-[9px] font-bold px-2 py-1 rounded"
+            >Slide</button>
+            <button
+              onClick={async () => {
+                if (!googleToken) {
+                  onGoogleSignIn();
+                  return;
+                }
+                const res = await fetch('/api/workspace/create', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({ googleToken, type: 'sheet', title: bootstrapData.title })
+                });
+                if (res.ok) {
+                  const data = await res.json();
+                  setFiles(prev => [data.file, ...prev]);
+                  alert('Sheet created!');
+                }
+              }}
+              className="bg-green-500 text-white text-[9px] font-bold px-2 py-1 rounded"
+            >Sheet</button>
             {isDemoActive && (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-full px-3 py-1 text-[9px] font-sans font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest animate-pulse">
                 Demo Mode
               </div>
             )}
+          {googleToken && files.length > 0 && (
+            <div className="mt-2 text-[10px] text-gray-500">
+              <p>Recent files:</p>
+              <ul>
+                {files.map(f => (
+                  <li key={f.id}><a href={f.webViewLink} target="_blank" rel="noreferrer" className="text-blue-500 underline">{f.name}</a></li>
+                ))}
+              </ul>
+            </div>
+          )}
             <div className="bg-[#FAF9F6] dark:bg-[#252422] border border-[#E6E5E0] dark:border-[#2E2D2A] rounded-full px-3 py-1 text-[9px] font-sans font-bold text-indigo-600 dark:text-[#A8A4FF] uppercase tracking-widest transition-colors duration-300">
               {bootstrapData.type}
             </div>
